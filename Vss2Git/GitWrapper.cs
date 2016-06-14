@@ -103,7 +103,7 @@ namespace Hpdi.Vss2Git
 
         public override void RemoveFile(string path)
         {
-            VcsExec("rm -- " + QuoteRelativePath(path));
+            VcsExec("rm -f -- " + QuoteRelativePath(path));
             SetNeedsCommit();
         }
 
