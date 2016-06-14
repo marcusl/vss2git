@@ -585,7 +585,7 @@ namespace Hpdi.Vss2Git
         {
             if (!projectSpec.StartsWith("$/"))
             {
-                throw new ArgumentException("Project spec must start with $/", "projectSpec");
+                throw new ArgumentException("Project spec must start with $/ but was \"" + projectSpec + "\"", "projectSpec");
             }
 
             foreach (var rootInfo in rootInfos.Values)
@@ -597,13 +597,7 @@ namespace Hpdi.Vss2Git
                     {
                         ++rootLength;
                     }
-
-                    // Fix the scenario where the projectSpec equals rootInfo.OriginalVssPath 
-                    // the root cannot have a parent
-                    if (projectSpec.Equals(rootInfo.OriginalVssPath)) 
-                        goto NotFound; 
-
-                    var subpath = projectSpec.Substring(rootLength);
+                    var subpath = projectSpec.Substring(Math.Min(rootLength, projectSpec.Length));
                     var subprojectNames = subpath.Split('/');
                     var projectInfo = rootInfo;
                     foreach (var subprojectName in subprojectNames)

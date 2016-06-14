@@ -21,6 +21,9 @@ using System.Windows.Forms;
 using Hpdi.VssLogicalLib;
 using System.IO;
 using System.Configuration;
+using System.Globalization;
+using System.Threading;
+using Mono.Options;
 
 namespace Hpdi.Vss2Git
 {
@@ -35,23 +38,93 @@ namespace Hpdi.Vss2Git
 
         private readonly Dictionary<int, EncodingInfo> codePages = new Dictionary<int, EncodingInfo>();
         private readonly WorkQueue workQueue = new WorkQueue(1);
+        private readonly WorkQueue backgroundQueue = new WorkQueue(1);
+
         private Logger logger = Logger.Null;
         private RevisionAnalyzer revisionAnalyzer;
         private ChangesetBuilder changesetBuilder;
         private string settingsFile;
 
+        private DateTime? continueAfter;
+
+        private OptionSet optionSet;
+        private bool goAndExit;
+        private bool exitOnComplete;
+
         public MainForm(string[] args)
         {
             InitializeComponent();
-            if (args.Length > 0)
+            parseCommandLine(args);
+        }
+
+
+        private void parseCommandLine(string[] args)
+        {
+            try
             {
-                settingsFile = args[0];
+                optionSet = new OptionSet() {
+                    { "s|settings=",  "the settings {FILE}",
+                       v => settingsFile = v },
+                    { "go",  "perform conversion and exit",
+                       v => goAndExit = v != null },
+                    { "h|help",  "show this message and exit",
+                       v => { if (v != null) showHelp(); } },
+                };
+                var extra = optionSet.Parse(args);
+                if (extra.Count > 0)
+                    throw new OptionException("Unknown option: " + extra[0], extra[0]);
             }
+            catch (OptionException ex)
+            {
+                MessageBox.Show("Invalid command line: " + ex.Message + "\n\n"
+                    + "Try `--help` for more information.", "VSS2Git",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+                Close();
+            }
+        }
+
+        private void showHelp()
+        {
+            var sw = new StringWriter();
+            optionSet.WriteOptionDescriptions(sw);
+            MessageBox.Show("Usage: " + Path.GetFileName(System.Reflection.Assembly.GetEntryAssembly().Location)
+                + " <options>\nWhere <options> are:\n" + sw,
+                "VSS2Git Help", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            Close();
         }
 
         private void OpenLog(string filename)
         {
             logger = string.IsNullOrEmpty(filename) ? Logger.Null : new Logger(filename);
+        }
+
+        private void LoadRepoSettings()
+        {
+            Invoke((MethodInvoker)delegate
+            {
+                IVcsWrapper vcsWrapper = outDirTextBox.Text.Length > 0 ? CreateVcsWrapper(Encoding.Default) : null;
+                backgroundQueue.AddLast(delegate
+                {
+                    continueAfter = vcsWrapper != null ? vcsWrapper.GetLastCommit() : null;
+                    Invoke((MethodInvoker)delegate
+                    {
+                        if (continueAfter == null)
+                        {
+                            if (continueSyncCheckBox.Checked)
+                                resetRepoCheckBox.Checked = true;
+                            continueSyncCheckBox.Enabled = continueSyncCheckBox.Checked = false;
+                        }
+                        else
+                        {
+                            resetRepoCheckBox.Checked = false;
+                            continueSyncCheckBox.Enabled = true;
+                            continueSyncCheckBox.Checked = true;
+                            continueSyncCheckBox.Text = "Continue sync from " + continueAfter;
+                        }
+
+                    });
+                });
+            });
         }
 
         private void goButton_Click(object sender, EventArgs e)
@@ -130,13 +203,14 @@ namespace Hpdi.Vss2Git
                         vcsExporter.CommitEncoding = encoding;
                     }
                     vcsExporter.ResetRepo = resetRepoCheckBox.Checked;
-                    vcsExporter.ExportToVcs(outDirTextBox.Text);
+                    vcsExporter.ExportToVcs(outDirTextBox.Text, continueAfter);
                 }
 
                 workQueue.Idle += delegate
                 {
                     logger.Dispose();
                     logger = Logger.Null;
+                    LoadRepoSettings();
                 };
 
                 statusTimer.Enabled = true;
@@ -206,8 +280,17 @@ namespace Hpdi.Vss2Git
                 changesetBuilder = null;
 
                 statusTimer.Enabled = false;
+                if (!goButton.Enabled)
+                {
+                    LoadRepoSettings();
+                }
                 goButton.Enabled = true;
                 cancelButton.Text = "Close";
+                if (goAndExit && exitOnComplete)
+                {
+                    exitOnComplete = false;
+                    Close();
+                }
             }
 
             var exceptions = workQueue.FetchExceptions();
@@ -246,6 +329,10 @@ namespace Hpdi.Vss2Git
                 description = string.Format("CP{0} - {1}", codePage, encoding.DisplayName);
                 var index = encodingComboBox.Items.Add(description);
                 codePages[index] = encoding;
+                if (codePage == 65001)
+                {
+                    encodingComboBox.SelectedIndex = index;
+                }
                 if (codePage == defaultCodePage)
                 {
                     codePages[defaultIndex] = encoding;
@@ -253,6 +340,12 @@ namespace Hpdi.Vss2Git
             }
 
             ReadSettings();
+            LoadRepoSettings();
+            if (goAndExit)
+            {
+                goButton_Click(null, null);
+                exitOnComplete = true;
+            }
         }
 
         private void MainForm_FormClosing(object sender, FormClosingEventArgs e)
@@ -294,6 +387,8 @@ namespace Hpdi.Vss2Git
             {
                 var settings = Properties.Settings.Default;
                 string lastSettingsFile = settings.LastSettingsFile;
+                if (lastSettingsFile == "")
+                    lastSettingsFile = "vss2git.properties";
                 settingsSaveFileDialog.InitialDirectory = Path.GetDirectoryName(lastSettingsFile);
                 settingsSaveFileDialog.FileName = Path.GetFileName(lastSettingsFile);
                 if (DialogResult.OK == settingsSaveFileDialog.ShowDialog(this))
@@ -366,7 +461,7 @@ namespace Hpdi.Vss2Git
             domainTextBox.Text = settings.DefaultEmailDomain;
             logTextBox.Text = settings.LogFile;
             transcodeCheckBox.Checked = settings.TranscodeComments;
-            resetRepoCheckBox.Checked = settings.ResetRepo;
+            resetRepoCheckBox.Checked = settings.ResetRepo || settings.ContinueSync;
             forceAnnotatedCheckBox.Checked = settings.ForceAnnotatedTags;
             anyCommentUpDown.Value = settings.AnyCommentSeconds;
             sameCommentUpDown.Value = settings.SameCommentSeconds;
@@ -403,6 +498,7 @@ namespace Hpdi.Vss2Git
             settings.LogFile = logTextBox.Text;
             settings.TranscodeComments = transcodeCheckBox.Checked;
             settings.ResetRepo = resetRepoCheckBox.Checked;
+            settings.ContinueSync = continueSyncCheckBox.Checked;
             settings.ForceAnnotatedTags = forceAnnotatedCheckBox.Checked;
             settings.AnyCommentSeconds = (int)anyCommentUpDown.Value;
             settings.SameCommentSeconds = (int)sameCommentUpDown.Value;
@@ -477,6 +573,58 @@ namespace Hpdi.Vss2Git
             return dictionary;
         }
 
+        private void DumpUsers()
+        {
+            var df = new VssDatabaseFactory(vssDirTextBox.Text);
+            var db = df.Open();
+            var path = vssProjectTextBox.Text;
+            VssProject project;
+            try
+            {
+                project = db.GetItem(path) as VssProject;
+            }
+            catch (VssPathException ex)
+            {
+                MessageBox.Show(ex.Message, "Invalid project path",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+            if (project == null)
+            {
+                MessageBox.Show(path + " is not a project", "Invalid project path",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+            var emailDictionary = ReadDictionaryFile("e-mail dictionary", db.BasePath, "emails.properties");
+
+            revisionAnalyzer = new RevisionAnalyzer(workQueue, logger, db);
+            if (!string.IsNullOrEmpty(excludeTextBox.Text))
+            {
+                revisionAnalyzer.ExcludeFiles = excludeTextBox.Text;
+            }
+            revisionAnalyzer.AddItem(project);
+            workQueue.AddLast(delegate (object work)
+            {
+                foreach (var dateEntry in revisionAnalyzer.SortedRevisions)
+                {
+                    foreach (Revision revision in dateEntry.Value)
+                    {
+                        var user = revision.User.ToLower();
+                        if (emailDictionary.ContainsKey(user))
+                            continue;
+                        emailDictionary.Add(user, "");
+                    }
+                }
+                string propsPath = db.BasePath + Path.DirectorySeparatorChar + "emails.properties";
+                WriteDictionaryFile(emailDictionary, propsPath);
+                MessageBox.Show("The list of usernames is written to:\n\n"
+                    + propsPath + "\n\n"
+                    + "Please edit it and fill in email addresses in the form:\n\n"
+                    + "username = Full Name <e-mail>\n\nor\n\nusername = e-mail", "User-email mapping",
+                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+            });
+        }
+
         private void svnStandardLayoutCheckBox_CheckedChanged(object sender, EventArgs e)
         {
             bool enabled = !svnStandardLayoutCheckBox.Checked;
@@ -521,6 +669,37 @@ namespace Hpdi.Vss2Git
         private void loadSettingsButton_Click(object sender, EventArgs e)
         {
             LoadSettings();
+        }
+
+        private void emailMap_Click(object sender, EventArgs e)
+        {
+            DumpUsers();
+        }
+
+        private void resetRepoCheckBox_CheckedChanged(object sender, EventArgs e)
+        {
+            if (resetRepoCheckBox.Checked)
+            {
+                continueSyncCheckBox.Checked = false;
+            }
+        }
+
+        private void continueSyncCheckBox_CheckedChanged(object sender, EventArgs e)
+        {
+            if (continueSyncCheckBox.Checked)
+            {
+                resetRepoCheckBox.Checked = false;
+            }
+        }
+
+        private void outDirTextBox_TextChanged(object sender, EventArgs e)
+        {
+            LoadRepoSettings();
+        }
+
+        private void vcsSetttingsTabs_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            LoadRepoSettings();
         }
     }
 }

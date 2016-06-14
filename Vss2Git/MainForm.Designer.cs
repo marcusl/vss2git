@@ -49,6 +49,7 @@
             this.changeLabel = new System.Windows.Forms.ToolStripStatusLabel();
             this.timeLabel = new System.Windows.Forms.ToolStripStatusLabel();
             this.outputGroupBox = new System.Windows.Forms.GroupBox();
+            this.continueSyncCheckBox = new System.Windows.Forms.CheckBox();
             this.outDirButton = new System.Windows.Forms.Button();
             this.resetRepoCheckBox = new System.Windows.Forms.CheckBox();
             this.vcsSetttingsTabs = new System.Windows.Forms.TabControl();
@@ -94,6 +95,7 @@
             this.settingsSaveFileDialog = new System.Windows.Forms.SaveFileDialog();
             this.saveSettingsButton = new System.Windows.Forms.Button();
             this.loadSettingsButton = new System.Windows.Forms.Button();
+            this.emailMap = new System.Windows.Forms.Button();
             this.vssGroupBox.SuspendLayout();
             this.statusStrip.SuspendLayout();
             this.outputGroupBox.SuspendLayout();
@@ -274,6 +276,7 @@
             // 
             this.outputGroupBox.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left) 
             | System.Windows.Forms.AnchorStyles.Right)));
+            this.outputGroupBox.Controls.Add(this.continueSyncCheckBox);
             this.outputGroupBox.Controls.Add(this.outDirButton);
             this.outputGroupBox.Controls.Add(this.resetRepoCheckBox);
             this.outputGroupBox.Controls.Add(this.vcsSetttingsTabs);
@@ -291,6 +294,17 @@
             this.outputGroupBox.TabIndex = 1;
             this.outputGroupBox.TabStop = false;
             this.outputGroupBox.Text = "Output Settings";
+            // 
+            // continueSyncCheckBox
+            // 
+            this.continueSyncCheckBox.AutoSize = true;
+            this.continueSyncCheckBox.Location = new System.Drawing.Point(306, 121);
+            this.continueSyncCheckBox.Name = "continueSyncCheckBox";
+            this.continueSyncCheckBox.Size = new System.Drawing.Size(183, 17);
+            this.continueSyncCheckBox.TabIndex = 11;
+            this.continueSyncCheckBox.Text = "Continue from last synced commit";
+            this.continueSyncCheckBox.UseVisualStyleBackColor = true;
+            this.continueSyncCheckBox.CheckedChanged += new System.EventHandler(this.continueSyncCheckBox_CheckedChanged);
             // 
             // outDirButton
             // 
@@ -313,6 +327,7 @@
             this.resetRepoCheckBox.TabIndex = 8;
             this.resetRepoCheckBox.Text = "Reset Repository before Export";
             this.resetRepoCheckBox.UseVisualStyleBackColor = true;
+            this.resetRepoCheckBox.CheckedChanged += new System.EventHandler(this.resetRepoCheckBox_CheckedChanged);
             // 
             // vcsSetttingsTabs
             // 
@@ -323,6 +338,7 @@
             this.vcsSetttingsTabs.SelectedIndex = 0;
             this.vcsSetttingsTabs.Size = new System.Drawing.Size(545, 159);
             this.vcsSetttingsTabs.TabIndex = 10;
+            this.vcsSetttingsTabs.SelectedIndexChanged += new System.EventHandler(this.vcsSetttingsTabs_SelectedIndexChanged);
             // 
             // tabPage1
             // 
@@ -553,6 +569,7 @@
             this.outDirTextBox.Name = "outDirTextBox";
             this.outDirTextBox.Size = new System.Drawing.Size(435, 20);
             this.outDirTextBox.TabIndex = 1;
+            this.outDirTextBox.TextChanged += new System.EventHandler(this.outDirTextBox_TextChanged);
             // 
             // outDirLabel
             // 
@@ -710,6 +727,16 @@
             this.loadSettingsButton.UseVisualStyleBackColor = true;
             this.loadSettingsButton.Click += new System.EventHandler(this.loadSettingsButton_Click);
             // 
+            // emailMap
+            // 
+            this.emailMap.Location = new System.Drawing.Point(191, 545);
+            this.emailMap.Name = "emailMap";
+            this.emailMap.Size = new System.Drawing.Size(136, 23);
+            this.emailMap.TabIndex = 8;
+            this.emailMap.Text = "User-email mapping...";
+            this.emailMap.UseVisualStyleBackColor = true;
+            this.emailMap.Click += new System.EventHandler(this.emailMap_Click);
+            // 
             // MainForm
             // 
             this.AcceptButton = this.goButton;
@@ -717,6 +744,7 @@
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.CancelButton = this.cancelButton;
             this.ClientSize = new System.Drawing.Size(584, 598);
+            this.Controls.Add(this.emailMap);
             this.Controls.Add(this.loadSettingsButton);
             this.Controls.Add(this.saveSettingsButton);
             this.Controls.Add(this.changesetGroupBox);
@@ -818,7 +846,8 @@
         private System.Windows.Forms.SaveFileDialog settingsSaveFileDialog;
         private System.Windows.Forms.Button saveSettingsButton;
         private System.Windows.Forms.Button loadSettingsButton;
-
+        private System.Windows.Forms.Button emailMap;
+        private System.Windows.Forms.CheckBox continueSyncCheckBox;
     }
 }
 

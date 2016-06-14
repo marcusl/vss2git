@@ -19,6 +19,7 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading;
 
 namespace Hpdi.Vss2Git
@@ -31,6 +32,10 @@ namespace Hpdi.Vss2Git
     {
         public static readonly string gitMetaDir = ".git";
         public static readonly string gitExecutable = "git";
+
+        private List<String> addQueue = new List<string>();
+        private List<String> deleteQueue = new List<string>();
+        private List<String> dirDeleteQueue = new List<string>();
 
         private Encoding commitEncoding = Encoding.UTF8;
 
@@ -55,6 +60,11 @@ namespace Hpdi.Vss2Git
             this.forceAnnotatedTags = forceAnnotatedTags;
         }
 
+        public override string QuoteRelativePath(string path)
+        {
+            return base.QuoteRelativePath(path).Replace('\\', '/'); // cygwin git compatibility
+        }
+
         public override void Init(bool resetRepo)
         {
             if (resetRepo)
@@ -62,22 +72,28 @@ namespace Hpdi.Vss2Git
                 DeleteDirectory(GetOutputDirectory());
                 Thread.Sleep(0);
                 Directory.CreateDirectory(GetOutputDirectory());
+                VcsExec("init");
             }
-            VcsExec("init");
         }
 
-        public override void Configure()
+        public override void Configure(bool newRepo)
         {
             if (commitEncoding.WebName != "utf-8")
             {
                 SetConfig("i18n.commitencoding", commitEncoding.WebName);
             }
-            CheckOutputDirectory();
+            CheckOutputDirectory(newRepo);
         }
 
         public override bool Add(string path)
         {
-            var startInfo = GetStartInfo("add -f -- " + QuoteRelativePath(path));
+            addQueue.Add(path);
+            return true;
+        }
+
+        private bool DoAdd(string paths)
+        {
+            var startInfo = GetStartInfo("add -f --" + paths);
 
             // add fails if there are no files (directories don't count)
             bool result = ExecuteUnless(startInfo, "did not match any files");
@@ -85,10 +101,35 @@ namespace Hpdi.Vss2Git
             return result;
         }
 
+        private bool DoAdds()
+        {
+            bool rc = false;
+            string paths = "";
+            foreach (string path in addQueue)
+            {
+                if (paths.Length > 8000)
+                {
+                    rc |= DoAdd(paths);
+                    paths = "";
+                }
+                paths += " " + QuoteRelativePath(path);
+            }
+            addQueue.Clear();
+            if (paths.Length > 1)
+                rc |= DoAdd(paths);
+            return rc;
+        }
+
         public override bool AddDir(string path)
         {
             // do nothing - git does not care about directories
             return true;
+        }
+        public override bool NeedsCommit()
+        {
+            DoAdds();
+            DoDeletes();
+            return base.NeedsCommit();
         }
 
         public override bool AddAll()
@@ -103,13 +144,46 @@ namespace Hpdi.Vss2Git
 
         public override void RemoveFile(string path)
         {
-            VcsExec("rm -f -- " + QuoteRelativePath(path));
+            deleteQueue.Add(path);
             SetNeedsCommit();
+        }
+
+        private void DoDelete(string paths)
+        {
+            VcsExec("rm -r -f --" + paths); // is always recursive
+        }
+
+        private void DoDeletes()
+        {
+            string paths = "";
+            foreach (string path in deleteQueue)
+            {
+                if (paths.Length > 8000)
+                {
+                    DoDelete(paths);
+                    paths = "";
+                }
+                paths += " " + QuoteRelativePath(path);
+            }
+            deleteQueue.Clear();
+            if (paths.Length > 1)
+                DoDelete(paths);
+            CleanupEmptyDirs();
+        }
+        private void CleanupEmptyDirs()
+        {
+            foreach (string dir in dirDeleteQueue)
+            {
+                if (Directory.Exists(dir))
+                    Directory.Delete(dir, true);
+            }
+            dirDeleteQueue.Clear();
         }
 
         public override void RemoveDir(string path, bool recursive)
         {
-            VcsExec("rm " + (recursive ? "-r -f " : "") + "-- " + QuoteRelativePath(path));
+            deleteQueue.Add(path); // is always recursive
+            dirDeleteQueue.Add(path);
             SetNeedsCommit();
         }
 
@@ -120,7 +194,7 @@ namespace Hpdi.Vss2Git
 
         public override void Move(string sourcePath, string destPath)
         {
-            VcsExec("mv -- " + QuoteRelativePath(sourcePath) + " " + QuoteRelativePath(destPath));
+            VcsExec("mv -f -- " + QuoteRelativePath(sourcePath) + " " + QuoteRelativePath(destPath));
             SetNeedsCommit();
         }
 
@@ -159,7 +233,7 @@ namespace Hpdi.Vss2Git
         {
             TempFile commentFile;
 
-            var args = "tag";
+            var args = "tag -f"; //TODO: check how to detect label deletions (doesn't seem to happen right now)
             // tools like Mercurial's git converter only import annotated tags
             // remark: annotated tags are created with the git -a option,
             // see e.g. http://learn.github.com/p/tagging.html
@@ -209,6 +283,10 @@ namespace Hpdi.Vss2Git
                     args += " -m " + Quote(comment);
                 }
             }
+            else
+            {
+                args += " --allow-empty-message --no-edit -m \"\"";
+            }
         }
 
         private static string GetUtcTimeString(DateTime localTime)
@@ -219,5 +297,34 @@ namespace Hpdi.Vss2Git
             // format time according to ISO 8601 (avoiding locale-dependent month/day names)
             return utcTime.ToString("yyyy'-'MM'-'dd HH':'mm':'ss +0000");
         }
+
+        private static Regex lastCommitTimestampRegex = new Regex("^Date:\\s*(\\S+)", RegexOptions.Multiline);
+
+        public override DateTime? GetLastCommit()
+        {
+            if (Directory.Exists(Path.Combine(GetOutputDirectory(), gitMetaDir)) && FindExecutable())
+            {
+                try {
+                    var startInfo = GetStartInfo("log -n 1 --date=raw");
+                    string stdout, stderr;
+                    int exitCode = Execute(startInfo, out stdout, out stderr);
+                    if (exitCode == 0)
+                    {
+                        var m = lastCommitTimestampRegex.Match(stdout);
+                        if (m.Success)
+                        {
+                            long unixTimeStamp = long.Parse(m.Groups[1].Value);
+                            DateTime dt = new DateTime(1970, 1, 1, 0, 0, 0, 0, System.DateTimeKind.Utc);
+                            dt = dt.AddSeconds(unixTimeStamp).ToLocalTime();
+                            return dt;
+                        }
+                    }
+                } catch (Exception )
+                {
+                }
+            }
+            return null;
+        }
+
     }
 }

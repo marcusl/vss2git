@@ -24,6 +24,7 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Windows.Forms;
 using Hpdi.VssLogicalLib;
+using System.Linq;
 
 namespace Hpdi.Vss2Git
 {
@@ -33,17 +34,18 @@ namespace Hpdi.Vss2Git
     /// <author>Trevor Robinson</author>
     class VcsExporter : Worker
     {
-        private const string DefaultComment = "Vss2Git";
+        private const string DefaultComment = "";
 
         private readonly VssDatabase database;
         private readonly RevisionAnalyzer revisionAnalyzer;
         private readonly ChangesetBuilder changesetBuilder;
         private readonly IVcsWrapper vcsWrapper;
+        private readonly IDictionary<string, string> usernameDictionary;
         private readonly IDictionary<string, string> emailDictionary;
         private readonly StreamCopier streamCopier = new StreamCopier();
         private readonly HashSet<string> tagsUsed = new HashSet<string>();
 
-        private string emailDomain = "localhost";
+        private string emailDomain = "";
         public string EmailDomain
         {
             get { return emailDomain; }
@@ -58,6 +60,8 @@ namespace Hpdi.Vss2Git
         }
 
         private Encoding commitEncoding = Encoding.UTF8;
+        private DateTime? continueAfter;
+
         public Encoding CommitEncoding
         {
             get { return commitEncoding; }
@@ -66,18 +70,35 @@ namespace Hpdi.Vss2Git
 
         public VcsExporter(WorkQueue workQueue, Logger logger,
             RevisionAnalyzer revisionAnalyzer, ChangesetBuilder changesetBuilder,
-            IVcsWrapper vcsWrapper, IDictionary<string, string> emailDictionary)
+            IVcsWrapper vcsWrapper, IDictionary<string, string> usersmap)
             : base(workQueue, logger)
         {
             this.database = revisionAnalyzer.Database;
             this.revisionAnalyzer = revisionAnalyzer;
             this.changesetBuilder = changesetBuilder;
             this.vcsWrapper = vcsWrapper;
-            this.emailDictionary = emailDictionary;
+            this.emailDictionary = new Dictionary<string, string>();
+            this.usernameDictionary = new Dictionary<string, string>();
+            Regex emailRegex = new Regex("(\\S.*?)\\s*<(.+)>");
+            foreach (var e in usersmap)
+            {
+                string key = e.Key.ToLower();
+                string email = e.Value.Trim();
+                if (email == "")
+                    continue;
+                Match m = emailRegex.Match(email);
+                if (m.Success)
+                {
+                    this.usernameDictionary.Add(key, m.Groups[1].Value);
+                    email = m.Groups[2].Value;
+                }
+                this.emailDictionary.Add(key, email);
+            }
         }
 
-        public void ExportToVcs(string repoPath)
+        public void ExportToVcs(string repoPath, DateTime? continueAfter)
         {
+            this.continueAfter = continueAfter;
             workQueue.AddLast(delegate(object work)
             {
                 var stopwatch = Stopwatch.StartNew();
@@ -85,9 +106,13 @@ namespace Hpdi.Vss2Git
                 logger.WriteSectionSeparator();
                 LogStatus(work, "Initializing repository");
 
+                if (continueAfter != null && resetRepo)
+                    throw new ProcessException("Unable to continue sync and reset repo at the same time!", null, null);
                 // create repository directory if it does not exist
                 if (!Directory.Exists(repoPath))
                 {
+                    if (continueAfter != null)
+                        throw new ProcessException("Unable to continue: " + repoPath + " does not exist.", null, null);
                     Directory.CreateDirectory(repoPath);
                 }
 
@@ -113,7 +138,7 @@ namespace Hpdi.Vss2Git
 
                 AbortRetryIgnore(delegate
                 {
-                    vcsWrapper.Configure();
+                    vcsWrapper.Configure(continueAfter == null);
                 });
 
                 var pathMapper = new VssPathMapper();
@@ -169,15 +194,31 @@ namespace Hpdi.Vss2Git
                 logger.WriteSectionSeparator();
                 logger.WriteLine("Replaying Changesets");
 
-                var changesetId = 1;
+                var changesetId = 0;
                 var commitCount = 0;
                 var tagCount = 0;
                 var replayStopwatch = new Stopwatch();
                 var labels = new LinkedList<Revision>();
                 tagsUsed.Clear();
 
+                bool found = continueAfter == null;
+
                 foreach (var changeset in changesets)
                 {
+                    ++changesetId;
+                    if (workQueue.IsAborting)
+                    {
+                        return;
+                    }
+
+                    if (!found)
+                    {
+                        if (continueAfter.Equals(changeset.DateTime))
+                            found = true;
+                        SkipChangeset(pathMapper, changeset);
+                        continue;
+                    }
+
                     var changesetDesc = string.Format(CultureInfo.InvariantCulture,
                         "changeset {0} from {1}", changesetId, changeset.DateTime);
 
@@ -189,6 +230,7 @@ namespace Hpdi.Vss2Git
                     try
                     {
                         ReplayChangeset(pathMapper, changeset, labels);
+                        vcsWrapper.NeedsCommit(); // to flush outstanding adds/deletes
                     }
                     finally
                     {
@@ -208,11 +250,6 @@ namespace Hpdi.Vss2Git
                         {
                             ++commitCount;
                         }
-                    }
-
-                    if (workQueue.IsAborting)
-                    {
-                        return;
                     }
 
                     // create tags for any labels in the changeset
@@ -260,11 +297,15 @@ namespace Hpdi.Vss2Git
                             }
                         }
                     }
-
-                    ++changesetId;
                 }
 
                 stopwatch.Stop();
+
+                if (!found)
+                {
+                    logger.WriteLine("Cannot Sync: VSS changeset at {0} not found.", continueAfter);
+                    throw new ProcessException(string.Format("Cannot Sync: VSS changeset at {0} not found.", continueAfter), null, null);
+                }
 
                 logger.WriteSectionSeparator();
                 logger.WriteLine(vcs + " export complete in {0:HH:mm:ss}", new DateTime(stopwatch.ElapsedTicks));
@@ -632,13 +673,125 @@ namespace Hpdi.Vss2Git
             }
         }
 
+        private void SkipChangeset(VssPathMapper pathMapper, Changeset changeset)
+        {
+            foreach (Revision revision in changeset.Revisions)
+            {
+                if (workQueue.IsAborting)
+                {
+                    break;
+                }
+                SkipRevision(pathMapper, revision);
+            }
+        }
+
+        private void SkipRevision(VssPathMapper pathMapper, Revision revision)
+        {
+            var actionType = revision.Action.Type;
+            if (revision.Item.IsProject)
+            {
+                var project = revision.Item;
+                var projectPath = pathMapper.GetProjectPath(project.PhysicalName);
+
+                VssItemName target = null;
+                string targetPath = null;
+                var namedAction = revision.Action as VssNamedAction;
+                if (namedAction != null)
+                {
+                    target = namedAction.Name;
+                    if (projectPath != null)
+                    {
+                        targetPath = Path.Combine(projectPath, target.LogicalName);
+                    }
+                }
+
+                switch (actionType)
+                {
+                    case VssActionType.Add:
+                    case VssActionType.Share:
+                        pathMapper.AddItem(project, target);
+                        break;
+
+                    case VssActionType.Recover:
+                        pathMapper.RecoverItem(project, target);
+                        break;
+
+                    case VssActionType.Delete:
+                    case VssActionType.Destroy:
+                        pathMapper.DeleteItem(project, target);
+                        break;
+
+                    case VssActionType.Rename:
+                        pathMapper.RenameItem(target);
+                        break;
+
+                    case VssActionType.MoveFrom:
+                        {
+                            var moveFromAction = (VssMoveFromAction)revision.Action;
+                            var isInside = pathMapper.IsInRoot(moveFromAction.OriginalProject);
+
+                            if (isInside)
+                            {
+                                pathMapper.MoveProjectFrom(project, target, moveFromAction.OriginalProject);
+                            }
+                            else
+                            {
+                                pathMapper.RecoverItem(project, target);
+                            }
+                        }
+                        break;
+
+                    case VssActionType.MoveTo:
+                        {
+                            var moveToAction = (VssMoveToAction)revision.Action;
+                            var isInside = pathMapper.IsInRoot(moveToAction.NewProject);
+                            if (!isInside)
+                            {
+                                pathMapper.DeleteItem(project, target);
+                            }
+                        }
+                        break;
+
+                    case VssActionType.Pin:
+                        {
+                            var pinAction = (VssPinAction)revision.Action;
+                            if (pinAction.Pinned)
+                            {
+                                pathMapper.PinItem(project, target);
+                            }
+                            else
+                            {
+                                pathMapper.UnpinItem(project, target);
+                            }
+                        }
+                        break;
+
+                    case VssActionType.Branch:
+                        {
+                            var branchAction = (VssBranchAction)revision.Action;
+                            pathMapper.BranchFile(project, target, branchAction.Source);
+                        }
+                        break;
+
+                    case VssActionType.Restore:
+                        pathMapper.AddItem(project, target);
+                        break;
+                }
+            }
+            // item is a file, not a project
+            else if (actionType == VssActionType.Edit || actionType == VssActionType.Branch)
+            {
+                pathMapper.SetFileVersion(revision.Item, revision.Version);
+            }
+        }
+
         private bool CommitChangeset(Changeset changeset)
         {
             var result = false;
             AbortRetryIgnore(delegate
             {
                 result = vcsWrapper.AddAll() &&
-                    vcsWrapper.Commit(changeset.User, GetEmail(changeset.User),
+                    vcsWrapper.Commit(GetUsername(changeset.User), GetEmail(changeset.User),
                     changeset.Comment ?? DefaultComment, changeset.DateTime);
             });
             return result;
@@ -689,16 +842,28 @@ namespace Hpdi.Vss2Git
             return false;
         }
 
+        private string GetUsername(string user)
+        {
+            // keys to the dictionary: user name in lower case, blanks replaced by dots
+            user = user.ToLower();
+            if (usernameDictionary != null && usernameDictionary.ContainsKey(user))
+            {
+                return usernameDictionary[user];
+            }
+            // if we can't find the user in the dictionary, we use the user name as-is
+            return user;
+        }
+
         private string GetEmail(string user)
         {
             // keys to the dictionary: user name in lower case, blanks replaced by dots
-            user = user.ToLower().Replace(' ', '.');
+            user = user.ToLower();
             if (emailDictionary != null && emailDictionary.ContainsKey(user))
             {
                 return emailDictionary[user];
             }
-            // if we can't find the user in the dictionary, we return an default email
-            return user + "@" + emailDomain;
+            // if we can't find the user in the dictionary, we generate the email from the username
+            return emailDomain.Equals("") ? user : user.Replace(' ', '.') + "@" + emailDomain;
         }
 
         private string GetTagFromLabel(string label)
@@ -723,6 +888,10 @@ namespace Hpdi.Vss2Git
             string physicalName, int version, string underProject)
         {
             var paths = pathMapper.GetFilePaths(physicalName, underProject);
+            if (!paths.Any())
+            {
+                logger.WriteLine("WARNING: {0}: no physical path, {1} revision {2} skipped", physicalName, actionType, version);
+            }
             foreach (string path in paths)
             {
                 logger.WriteLine("{0}: {1} revision {2}", path, actionType, version);
