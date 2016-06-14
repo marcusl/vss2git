@@ -122,15 +122,16 @@
             this.vssGroupBox.Controls.Add(this.vssDirLabel);
             this.vssGroupBox.Location = new System.Drawing.Point(12, 12);
             this.vssGroupBox.Name = "vssGroupBox";
-            this.vssGroupBox.Size = new System.Drawing.Size(560, 126);
+            this.vssGroupBox.Size = new System.Drawing.Size(680, 126);
             this.vssGroupBox.TabIndex = 0;
             this.vssGroupBox.TabStop = false;
             this.vssGroupBox.Text = "VSS Settings";
             // 
             // vssDirButton
             // 
+            this.vssDirButton.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
             this.vssDirButton.Image = ((System.Drawing.Image)(resources.GetObject("vssDirButton.Image")));
-            this.vssDirButton.Location = new System.Drawing.Point(531, 17);
+            this.vssDirButton.Location = new System.Drawing.Point(651, 17);
             this.vssDirButton.Name = "vssDirButton";
             this.vssDirButton.Size = new System.Drawing.Size(23, 23);
             this.vssDirButton.TabIndex = 2;
@@ -154,7 +155,7 @@
             this.encodingComboBox.FormattingEnabled = true;
             this.encodingComboBox.Location = new System.Drawing.Point(90, 97);
             this.encodingComboBox.Name = "encodingComboBox";
-            this.encodingComboBox.Size = new System.Drawing.Size(464, 21);
+            this.encodingComboBox.Size = new System.Drawing.Size(584, 21);
             this.encodingComboBox.TabIndex = 8;
             // 
             // excludeTextBox
@@ -163,7 +164,7 @@
             | System.Windows.Forms.AnchorStyles.Right)));
             this.excludeTextBox.Location = new System.Drawing.Point(90, 71);
             this.excludeTextBox.Name = "excludeTextBox";
-            this.excludeTextBox.Size = new System.Drawing.Size(464, 20);
+            this.excludeTextBox.Size = new System.Drawing.Size(584, 20);
             this.excludeTextBox.TabIndex = 6;
             // 
             // excludeLabel
@@ -181,7 +182,7 @@
             | System.Windows.Forms.AnchorStyles.Right)));
             this.vssProjectTextBox.Location = new System.Drawing.Point(90, 45);
             this.vssProjectTextBox.Name = "vssProjectTextBox";
-            this.vssProjectTextBox.Size = new System.Drawing.Size(464, 20);
+            this.vssProjectTextBox.Size = new System.Drawing.Size(584, 20);
             this.vssProjectTextBox.TabIndex = 4;
             // 
             // vssDirTextBox
@@ -190,7 +191,7 @@
             | System.Windows.Forms.AnchorStyles.Right)));
             this.vssDirTextBox.Location = new System.Drawing.Point(90, 19);
             this.vssDirTextBox.Name = "vssDirTextBox";
-            this.vssDirTextBox.Size = new System.Drawing.Size(435, 20);
+            this.vssDirTextBox.Size = new System.Drawing.Size(555, 20);
             this.vssDirTextBox.TabIndex = 1;
             // 
             // vssProjectLabel
@@ -214,7 +215,7 @@
             // goButton
             // 
             this.goButton.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
-            this.goButton.Location = new System.Drawing.Point(416, 545);
+            this.goButton.Location = new System.Drawing.Point(536, 545);
             this.goButton.Name = "goButton";
             this.goButton.Size = new System.Drawing.Size(75, 23);
             this.goButton.TabIndex = 3;
@@ -234,16 +235,16 @@
             this.revisionLabel,
             this.changeLabel,
             this.timeLabel});
-            this.statusStrip.Location = new System.Drawing.Point(0, 576);
+            this.statusStrip.Location = new System.Drawing.Point(0, 575);
             this.statusStrip.Name = "statusStrip";
-            this.statusStrip.Size = new System.Drawing.Size(584, 22);
+            this.statusStrip.Size = new System.Drawing.Size(704, 22);
             this.statusStrip.TabIndex = 5;
             this.statusStrip.Text = "statusStrip1";
             // 
             // statusLabel
             // 
             this.statusLabel.Name = "statusLabel";
-            this.statusLabel.Size = new System.Drawing.Size(284, 17);
+            this.statusLabel.Size = new System.Drawing.Size(404, 17);
             this.statusLabel.Spring = true;
             this.statusLabel.Text = "Idle";
             this.statusLabel.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
@@ -290,7 +291,7 @@
             this.outputGroupBox.Controls.Add(this.logLabel);
             this.outputGroupBox.Location = new System.Drawing.Point(12, 138);
             this.outputGroupBox.Name = "outputGroupBox";
-            this.outputGroupBox.Size = new System.Drawing.Size(560, 320);
+            this.outputGroupBox.Size = new System.Drawing.Size(680, 320);
             this.outputGroupBox.TabIndex = 1;
             this.outputGroupBox.TabStop = false;
             this.outputGroupBox.Text = "Output Settings";
@@ -308,8 +309,9 @@
             // 
             // outDirButton
             // 
+            this.outDirButton.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
             this.outDirButton.Image = ((System.Drawing.Image)(resources.GetObject("outDirButton.Image")));
-            this.outDirButton.Location = new System.Drawing.Point(531, 17);
+            this.outDirButton.Location = new System.Drawing.Point(651, 17);
             this.outDirButton.Name = "outDirButton";
             this.outDirButton.Size = new System.Drawing.Size(23, 23);
             this.outDirButton.TabIndex = 2;
@@ -331,12 +333,14 @@
             // 
             // vcsSetttingsTabs
             // 
+            this.vcsSetttingsTabs.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left) 
+            | System.Windows.Forms.AnchorStyles.Right)));
             this.vcsSetttingsTabs.Controls.Add(this.tabPage1);
             this.vcsSetttingsTabs.Controls.Add(this.tabPage2);
             this.vcsSetttingsTabs.Location = new System.Drawing.Point(9, 154);
             this.vcsSetttingsTabs.Name = "vcsSetttingsTabs";
             this.vcsSetttingsTabs.SelectedIndex = 0;
-            this.vcsSetttingsTabs.Size = new System.Drawing.Size(545, 159);
+            this.vcsSetttingsTabs.Size = new System.Drawing.Size(665, 159);
             this.vcsSetttingsTabs.TabIndex = 10;
             this.vcsSetttingsTabs.SelectedIndexChanged += new System.EventHandler(this.vcsSetttingsTabs_SelectedIndexChanged);
             // 
@@ -346,7 +350,7 @@
             this.tabPage1.Location = new System.Drawing.Point(4, 22);
             this.tabPage1.Name = "tabPage1";
             this.tabPage1.Padding = new System.Windows.Forms.Padding(3);
-            this.tabPage1.Size = new System.Drawing.Size(537, 133);
+            this.tabPage1.Size = new System.Drawing.Size(657, 133);
             this.tabPage1.TabIndex = 0;
             this.tabPage1.Text = "git";
             this.tabPage1.UseVisualStyleBackColor = true;
@@ -549,7 +553,7 @@
             | System.Windows.Forms.AnchorStyles.Right)));
             this.domainTextBox.Location = new System.Drawing.Point(90, 45);
             this.domainTextBox.Name = "domainTextBox";
-            this.domainTextBox.Size = new System.Drawing.Size(464, 20);
+            this.domainTextBox.Size = new System.Drawing.Size(584, 20);
             this.domainTextBox.TabIndex = 4;
             // 
             // domainLabel
@@ -567,7 +571,7 @@
             | System.Windows.Forms.AnchorStyles.Right)));
             this.outDirTextBox.Location = new System.Drawing.Point(90, 19);
             this.outDirTextBox.Name = "outDirTextBox";
-            this.outDirTextBox.Size = new System.Drawing.Size(435, 20);
+            this.outDirTextBox.Size = new System.Drawing.Size(555, 20);
             this.outDirTextBox.TabIndex = 1;
             this.outDirTextBox.TextChanged += new System.EventHandler(this.outDirTextBox_TextChanged);
             // 
@@ -586,7 +590,7 @@
             | System.Windows.Forms.AnchorStyles.Right)));
             this.logTextBox.Location = new System.Drawing.Point(90, 72);
             this.logTextBox.Name = "logTextBox";
-            this.logTextBox.Size = new System.Drawing.Size(464, 20);
+            this.logTextBox.Size = new System.Drawing.Size(584, 20);
             this.logTextBox.TabIndex = 6;
             // 
             // logLabel
@@ -602,7 +606,7 @@
             // 
             this.cancelButton.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
             this.cancelButton.DialogResult = System.Windows.Forms.DialogResult.Cancel;
-            this.cancelButton.Location = new System.Drawing.Point(497, 545);
+            this.cancelButton.Location = new System.Drawing.Point(617, 545);
             this.cancelButton.Name = "cancelButton";
             this.cancelButton.Size = new System.Drawing.Size(75, 23);
             this.cancelButton.TabIndex = 4;
@@ -612,6 +616,8 @@
             // 
             // changesetGroupBox
             // 
+            this.changesetGroupBox.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left) 
+            | System.Windows.Forms.AnchorStyles.Right)));
             this.changesetGroupBox.Controls.Add(this.label4);
             this.changesetGroupBox.Controls.Add(this.label3);
             this.changesetGroupBox.Controls.Add(this.sameCommentUpDown);
@@ -620,7 +626,7 @@
             this.changesetGroupBox.Controls.Add(this.anyCommentUpDown);
             this.changesetGroupBox.Location = new System.Drawing.Point(12, 464);
             this.changesetGroupBox.Name = "changesetGroupBox";
-            this.changesetGroupBox.Size = new System.Drawing.Size(560, 75);
+            this.changesetGroupBox.Size = new System.Drawing.Size(680, 75);
             this.changesetGroupBox.TabIndex = 2;
             this.changesetGroupBox.TabStop = false;
             this.changesetGroupBox.Text = "Changeset Building";
@@ -743,7 +749,7 @@
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.CancelButton = this.cancelButton;
-            this.ClientSize = new System.Drawing.Size(584, 598);
+            this.ClientSize = new System.Drawing.Size(704, 597);
             this.Controls.Add(this.emailMap);
             this.Controls.Add(this.loadSettingsButton);
             this.Controls.Add(this.saveSettingsButton);
