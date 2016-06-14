@@ -77,7 +77,7 @@ namespace Hpdi.Vss2Git
 
         public override bool Add(string path)
         {
-            var startInfo = GetStartInfo("add -- " + QuoteRelativePath(path));
+            var startInfo = GetStartInfo("add -f -- " + QuoteRelativePath(path));
 
             // add fails if there are no files (directories don't count)
             bool result = ExecuteUnless(startInfo, "did not match any files");
@@ -93,7 +93,7 @@ namespace Hpdi.Vss2Git
 
         public override bool AddAll()
         {
-            var startInfo = GetStartInfo("add -A");
+            var startInfo = GetStartInfo("add -f -A");
 
             // add fails if there are no files (directories don't count)
             bool result = ExecuteUnless(startInfo, "did not match any files");
